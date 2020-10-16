@@ -1,0 +1,8 @@
+---
+- hosts: all
+  become: true
+  tasks:
+  #Apache Configuration
+    - name: Install LAMP Packages
+      yum: name={{ item }} state=absent update_cache=yes
+      loop: [ 'httpd', 'mariadb-server','php', 'php-mysql','php-pear','python3','MySQL-python']

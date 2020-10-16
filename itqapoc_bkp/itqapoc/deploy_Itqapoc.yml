@@ -1,0 +1,88 @@
+---
+- hosts: all
+  become: true
+  become_user: root
+  tasks:
+    - name: What if we use yum_repository?
+      yum_repository:
+       baseurl: https://dl.fedoraproject.org/pub/epel/7Server/x86_64/
+       description: "Epel release."
+       name: epel-release
+       state: present  
+#Apache Configuration
+    - name: copy application files to remote nodes
+      copy: 
+        src: /tmp/itqapoc
+        dest: /tmp
+    - name: Install LAMP Packages
+      yum: name={{ item }} state=present update_cache=yes
+      loop: [ 'httpd','httpd-tools','mariadb','mariadb-server','apr','apr-util','php', 'php-mysql','php-pear','python3','MySQL-python']
+      notify: 
+        # - test mysql_secure_installation
+         #- starte maria db service
+         - Create database POC and tables
+         - Create users for php in POC database tables
+         - unarachive itqapoc.tar
+         - restart httpd service
+    - name: configure httpd conf file
+      copy:
+        src: /tmp/itqapoc/httpd.conf
+        dest: /etc/httpd/conf/httpd.conf
+        owner: root
+      notify:
+         - restart httpd service
+    - name: Open port 80 for http access
+      firewalld:
+        port: 80/tcp
+        zone: public
+        permanent: yes
+        state: enabled
+      notify:
+         - Restart the firewalld service to load in the firewall changes
+         - restart httpd service
+    - name: unarachive itqapoc.tar
+      unarchive:
+        src: /tmp/itqapoc/itqapoc.tar
+        dest: /var/www/html
+        owner: root
+      notify: restart httpd service
+    - name: starte maria db service
+      service: name=mariadb state=started
+    - name: test mysql_secure_installation
+      mysql_secure_installation:
+       login_password: ''
+       new_password: password23
+       user: root
+       login_host: localhost
+       hosts: [ 'localhost','127.0.0.1','::1' ]
+       change_root_password: true
+       remove_anonymous_user: true
+       disallow_root_login_remotely: true
+       remove_test_db: true
+  handlers:
+    - name: Create database POC and tables 
+      mysql_db:
+       login_user: root
+       login_unix_socket: /var/lib/mysql/mysql.sock
+       login_password: password23
+       login_host: localhost
+       state: import
+       name: all
+       target: /tmp/itqapoc/itqapoc.sql
+    - name: Create users for php in POC database tables 
+      mysql_db:
+       login_user: root
+       login_password: password23
+       login_host: localhost
+       state: import
+       name: all
+       target: /tmp/itqapoc/gcp_user_creation.sql
+       login_unix_socket: /var/lib/mysql/mysql.sock
+    - name: Restart the firewalld service to load in the firewall changes
+      service: 
+       name: firewalld
+       state: reloaded 
+    - name: restart httpd service
+      service:
+       name: httpd
+       state: restarted

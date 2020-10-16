@@ -1,0 +1,68 @@
+---
+- hosts: all
+  become: true
+  become_user: root
+  ignore_errors: yes
+  tasks:
+    - name: What if we use yum_repository?
+      yum_repository:
+       baseurl: https://dl.fedoraproject.org/pub/epel/7Server/x86_64/
+       description: "Epel release."
+       name: epel-release
+       state: present  
+#Apache Configuration
+    - name: delete database POC and tables 
+      mysql_db:
+       name: POC
+       login_user: root
+       login_password: password23
+       state: absent
+    - name: stop httpd service
+      service:
+        name: httpd
+        state: stopped
+    - name: configure httpd.conf file
+      file:
+        state: absent
+        path: /etc/httpd/conf/httpd.conf
+    - name: stope mariadb service
+      service:
+        name: mariadb
+        state: stopped
+    - name: UnInstall LAMP Packages
+      yum: name={{ item }} state=removed update_cache=yes
+      loop: [ 'httpd','httpd-tools','apr','apr-util', 'mariadb-server','php', 'php-mysql','php-pear','python3','MySQL-python']
+    - name: remove httpd and mysql files files
+      file:
+        path={{item}} state=absent
+      loop: 
+        - "/var/www"
+        - "/etc/httpd"
+        - "/usr/lib/httpd"
+        - "/var/lib/mysql"
+        - "/etc/my.cnf.d"
+        - "/etc/my.cnf"
+    - name: copy application files to remote nodes
+      file: 
+        state: absent
+        path: /tmp/itqapoc
+    - name: unarachive itqapoc.tar
+      file:
+        state: absent
+        path: /var/www/html/itqapoc
+    - name: close port 80 for http access
+      firewalld:
+        service: http
+        permanent: true
+        state: disabled
+      notify:
+         - Restart the firewalld service to load in the firewall changes
+  handlers:
+    - name: restart httpd service
+      service:
+       name: httpd
+       state: stopped
+    - name: Restart the firewalld service to load in the firewall changes
+      service: 
+       name: firewalld 
+       state: restarted
